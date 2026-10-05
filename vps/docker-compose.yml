@@ -1,0 +1,72 @@
+services:
+  mosquitto:
+    image: eclipse-mosquitto:2
+    restart: unless-stopped
+    ports:
+      - "1883:1883"
+    volumes:
+      - ./mosquitto:/mosquitto/config
+      - mosquitto-data:/mosquitto/data
+
+  influxdb:
+    image: influxdb:2
+    restart: unless-stopped
+    environment:
+      DOCKER_INFLUXDB_INIT_MODE: setup
+      DOCKER_INFLUXDB_INIT_USERNAME: ${INFLUX_ADMIN_USER}
+      DOCKER_INFLUXDB_INIT_PASSWORD: ${INFLUX_ADMIN_PASSWORD}
+      DOCKER_INFLUXDB_INIT_ORG: ${INFLUX_ORG}
+      DOCKER_INFLUXDB_INIT_BUCKET: ${INFLUX_BUCKET}
+      DOCKER_INFLUXDB_INIT_ADMIN_TOKEN: ${INFLUX_TOKEN}
+    volumes:
+      - influxdb-data:/var/lib/influxdb2
+
+  telegraf:
+    image: telegraf:latest
+    restart: unless-stopped
+    depends_on:
+      - mosquitto
+      - influxdb
+    environment:
+      INFLUX_TOKEN: ${INFLUX_TOKEN}
+      INFLUX_ORG: ${INFLUX_ORG}
+      INFLUX_BUCKET: ${INFLUX_BUCKET}
+      MQTT_TELEGRAF_PASSWORD: ${MQTT_TELEGRAF_PASSWORD}
+    volumes:
+      - ./telegraf/telegraf.conf:/etc/telegraf/telegraf.conf:ro
+
+  grafana:
+    image: grafana/grafana:latest
+    restart: unless-stopped
+    depends_on:
+      - influxdb
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD}
+      GF_SERVER_ROOT_URL: https://${DOMAIN}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      INFLUX_TOKEN: ${INFLUX_TOKEN}
+      INFLUX_ORG: ${INFLUX_ORG}
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/etc/grafana/dashboards:ro
+
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    depends_on:
+      - grafana
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      DOMAIN: ${DOMAIN}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+
+volumes:
+  mosquitto-data:
+  influxdb-data:
+  grafana-data:
+  caddy-data:

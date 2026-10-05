@@ -1,0 +1,5 @@
+user esp32
+topic write station/#
+
+user telegraf
+topic read station/#
